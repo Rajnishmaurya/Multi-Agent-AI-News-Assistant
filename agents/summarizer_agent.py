@@ -1,3 +1,4 @@
+
 import os
 from dotenv import load_dotenv
 
@@ -19,9 +20,9 @@ def summarizer_agent(state):
 
     print("\n--- SUMMARIZER AGENT STARTED ---")
 
-    topic = state["topic"]
-    research_results = state["research_results"]
-    sources = state["sources"]
+    topic = state.get("topic", "")
+    research_results = state.get("research_results", "")
+    sources = state.get("sources", [])
 
     try:
 
@@ -40,9 +41,11 @@ def summarizer_agent(state):
             1. Generate exactly five key points.
             2. Keep each point concise and informative.
             3. Focus on important technology developments.
-            4. Use only the provided research.
+            4. Use only the information provided in the research.
             5. Do not invent facts or statistics.
             6. Do not generate or modify source URLs.
+            7. Return each key point on a separate line.
+            8. Number the points from 1 to 5.
 
             Return only the five key points.
             """),
@@ -63,26 +66,43 @@ def summarizer_agent(state):
             "research_results": research_results
         })
 
-        summary = response.content
+        summary = response.content.strip()
 
-        # Add original sources received from Research Agent
-        formatted_sources = "\n\nSources:\n"
+        # Convert the response into five individual points
+        summary_points = [
+            line.strip()
+            for line in summary.splitlines()
+            if line.strip()
+        ]
 
-        for index, url in enumerate(sources, start=1):
-            formatted_sources += f"{index}. {url}\n"
+        # Remove numbering and bullet symbols
+        summary_points = [
+            point.lstrip("0123456789.-•) ").strip()
+            for point in summary_points
+        ]
 
-        # Prepare final notification content
-        final_summary = (
-            f"Topic: {topic}\n\n"
-            f"Key Highlights:\n{summary}"
-            f"{formatted_sources}"
-        )
+        # Remove empty lines
+        summary_points = [
+            point for point in summary_points if point
+        ]
+
+        # Validate exactly five points
+        if len(summary_points) != 5:
+            raise ValueError(
+                f"Expected exactly 5 summary points, "
+                f"but received {len(summary_points)}."
+            )
 
         print("\nSummary generated successfully!")
-        print(final_summary)
 
+        for index, point in enumerate(summary_points, start=1):
+            print(f"{index}. {point}")
+
+        print(f"\nSources received: {len(sources)}")
+
+        # Return data to the shared LangGraph state
         return {
-            "summary": final_summary,
+            "summary_points": summary_points,
             "sources": sources
         }
 
@@ -91,6 +111,7 @@ def summarizer_agent(state):
         print(f"Summarization failed: {e}")
 
         return {
-            "summary": "",
+            "summary_points": [],
+            "sources": sources,
             "error": str(e)
         }
